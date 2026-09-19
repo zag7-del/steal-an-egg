@@ -465,9 +465,12 @@ task.spawn(safeClosure(function()
         task.wait(CONFIG.ANTI.AFK_INTERVAL)
         if not FLAGS.Running then break end
         pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,1)
-            task.wait(0.05)
-            VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,1)
+            local vim = typeof(VirtualInputManager) ~= "nil" and VirtualInputManager or nil
+            if vim then
+                vim:SendMouseButtonEvent(0,0,0,true,game,1)
+                task.wait(0.05)
+                vim:SendMouseButtonEvent(0,0,0,false,game,1)
+            end
         end)
         pcall(function()
             local char = LocalPlayer.Character
@@ -518,19 +521,25 @@ if CONFIG.ANTI.PROPERTY_GUARD then
         end
     end)
 
-    addConn(LocalPlayer.CharacterAdded:Connect(
-        safeClosure(function(char)
-            local hum = char:WaitForChild("Humanoid", 5)
-            guardHumanoid(hum)
-            if CONFIG.ANTI.HUMANOID_RESTORE then
-                task.wait(0.2)
-                pcall(function()
-                    hum.WalkSpeed = CONFIG.ANTI.WALK_SPEED
-                    hum.JumpPower = CONFIG.ANTI.JUMP_POWER
+    pcall(function()
+        local conn = LocalPlayer.CharacterAdded:Connect(
+            safeClosure(function(char)
+                local ok, hum = pcall(function()
+                    return char:WaitForChild("Humanoid", 5)
                 end)
-            end
-        end)
-    ))
+                if not ok or not hum then return end
+                guardHumanoid(hum)
+                if CONFIG.ANTI.HUMANOID_RESTORE then
+                    task.wait(0.2)
+                    pcall(function()
+                        hum.WalkSpeed = CONFIG.ANTI.WALK_SPEED
+                        hum.JumpPower = CONFIG.ANTI.JUMP_POWER
+                    end)
+                end
+            end)
+        )
+        if conn then addConn(conn) end
+    end)
 end
 
 ----------------------------------------------------------------
