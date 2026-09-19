@@ -1018,9 +1018,15 @@ local function createPage(name)
         SortOrder = Enum.SortOrder.LayoutOrder,
     }, page)
 
-    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        page.CanvasSize = UDim2.new(0,0,0, layout.AbsoluteContentSize.Y + 15)
-    end)
+    if layout then
+        pcall(function()
+            layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                if page and layout then
+                    page.CanvasSize = UDim2.new(0,0,0, layout.AbsoluteContentSize.Y + 15)
+                end
+            end)
+        end)
+    end
 
     Pages[name] = page
     return page
@@ -1086,6 +1092,7 @@ createTab("Settings", "⚙  SETTINGS",   7)
 ----------------------------------------------------------------
 
 local function createSection(parent, text)
+    if not parent then return nil end
     return create("TextLabel", {
         Size               = UDim2.new(1,-10,0,26),
         BackgroundTransparency = 1,
@@ -1098,6 +1105,17 @@ local function createSection(parent, text)
 end
 
 local function createButton(parent, text)
+    if not parent then
+        warn("[VT] createButton: parent is nil for: " .. tostring(text))
+        -- return dummy object to prevent crash on chained :Connect()
+        local dummy = {}
+        setmetatable(dummy, {
+            __index = function(_, k)
+                return function() return dummy end
+            end
+        })
+        return dummy
+    end
     local btn = create("TextButton", {
         Size             = UDim2.new(1,-10,0,36),
         BackgroundColor3 = Color3.fromRGB(28,28,38),
@@ -1107,6 +1125,15 @@ local function createButton(parent, text)
         TextSize         = 10,
         Font             = Enum.Font.GothamMedium,
     }, parent)
+    if not btn then
+        local dummy = {}
+        setmetatable(dummy, {
+            __index = function(_, k)
+                return function() return dummy end
+            end
+        })
+        return dummy
+    end
     create("UICorner", {CornerRadius=UDim.new(0,7)}, btn)
     return btn
 end
@@ -1116,16 +1143,22 @@ local function createToggle(parent, text, initial, cb)
     local btn = createButton(parent, text..": "..(enabled and "ON" or "OFF"))
 
     local function refresh()
-        btn.Text = text..": "..(enabled and "ON" or "OFF")
-        btn.BackgroundColor3 = enabled
-            and Color3.fromRGB(38,130,65)
-            or  Color3.fromRGB(28,28,38)
+        pcall(function()
+            btn.Text = text..": "..(enabled and "ON" or "OFF")
+            btn.BackgroundColor3 = enabled
+                and Color3.fromRGB(38,130,65)
+                or  Color3.fromRGB(28,28,38)
+        end)
     end
 
-    btn.MouseButton1Click:Connect(function()
-        enabled = not enabled
-        refresh()
-        if cb then cb(enabled) end
+    pcall(function()
+        pcall(function()
+            if btn and btn.MouseButton1Click then
+                btn.MouseButton1Click:Connect(function()
+            enabled = not enabled
+            refresh()
+            if cb then pcall(cb, enabled) end
+        end)
     end)
 
     refresh()
@@ -1133,6 +1166,7 @@ local function createToggle(parent, text, initial, cb)
 end
 
 local function createLabel(parent, text)
+    if not parent then return {} end
     local lbl = create("TextLabel", {
         Size               = UDim2.new(1,-10,0,30),
         BackgroundColor3   = Color3.fromRGB(22,22,31),
@@ -1143,8 +1177,10 @@ local function createLabel(parent, text)
         Font               = Enum.Font.Gotham,
         TextXAlignment     = Enum.TextXAlignment.Left,
     }, parent)
-    create("UICorner",{CornerRadius=UDim.new(0,6)},lbl)
-    return lbl
+    if lbl then
+        create("UICorner",{CornerRadius=UDim.new(0,6)},lbl)
+    end
+    return lbl or {}
 end
 
 ----------------------------------------------------------------
@@ -1188,13 +1224,23 @@ local function setAutoBoss(v)
     updateDashboard()
 end
 
-createButton(HomePage, "Start / Stop Auto Farm").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(HomePage, "Start / Stop Auto Farm")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     setAutoFarm(not FLAGS.AutoFarm)
-end)
+        end)
+    end
+end
 
-createButton(HomePage, "Start / Stop Auto Boss").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(HomePage, "Start / Stop Auto Boss")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     setAutoBoss(not FLAGS.AutoBoss)
-end)
+        end)
+    end
+end
 
 ----------------------------------------------------------------
 -- FARM PAGE
@@ -1226,7 +1272,9 @@ createLabel(FarmPage, "  Secret > Eternal > Divine > Light > Dark")
 createSection(MovementPage, "MOVEMENT MODE")
 
 local ModeBtn = createButton(MovementPage, "Mode: ZIGZAG")
-ModeBtn.MouseButton1Click:Connect(function()
+pcall(function()
+    if ModeBtn and ModeBtn.MouseButton1Click then
+        ModeBtn.MouseButton1Click:Connect(function()
     CONFIG.MOVE_MODE = CONFIG.MOVE_MODE == "ZigZag" and "Direct" or "ZigZag"
     ModeBtn.Text = "Mode: "..string.upper(CONFIG.MOVE_MODE)
 end)
@@ -1236,7 +1284,9 @@ createSection(MovementPage, "SAVED POSITION")
 local SaveBtn = createButton(MovementPage, "Save Current Position")
 local GoBtn   = createButton(MovementPage, "Teleport To Saved Position")
 
-SaveBtn.MouseButton1Click:Connect(function()
+pcall(function()
+    if SaveBtn and SaveBtn.MouseButton1Click then
+        SaveBtn.MouseButton1Click:Connect(function()
     local root = getRoot()
     if root then
         CONFIG.TREADMILL_CFRAME = root.CFrame
@@ -1245,7 +1295,9 @@ SaveBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-GoBtn.MouseButton1Click:Connect(function()
+pcall(function()
+    if GoBtn and GoBtn.MouseButton1Click then
+        GoBtn.MouseButton1Click:Connect(function()
     moveTarget(CONFIG.TREADMILL_CFRAME)
     updateStatus("Teleported to saved position")
 end)
@@ -1256,13 +1308,17 @@ local SpeedLabel = createLabel(MovementPage, "  Teleport delay: "..CONFIG.ANTI.T
 local SpeedFast = createButton(MovementPage, "Faster (–0.01)")
 local SpeedSlow = createButton(MovementPage, "Slower (+0.01)")
 
-SpeedFast.MouseButton1Click:Connect(function()
+pcall(function()
+    if SpeedFast and SpeedFast.MouseButton1Click then
+        SpeedFast.MouseButton1Click:Connect(function()
     CONFIG.ANTI.TELEPORT_DELAY = math.max(0.01,
         CONFIG.ANTI.TELEPORT_DELAY - 0.01)
     SpeedLabel.Text = string.format("  Teleport delay: %.2f", CONFIG.ANTI.TELEPORT_DELAY)
 end)
 
-SpeedSlow.MouseButton1Click:Connect(function()
+pcall(function()
+    if SpeedSlow and SpeedSlow.MouseButton1Click then
+        SpeedSlow.MouseButton1Click:Connect(function()
     CONFIG.ANTI.TELEPORT_DELAY = math.min(0.3,
         CONFIG.ANTI.TELEPORT_DELAY + 0.01)
     SpeedLabel.Text = string.format("  Teleport delay: %.2f", CONFIG.ANTI.TELEPORT_DELAY)
@@ -1275,9 +1331,14 @@ end)
 createSection(BossPage, "BOSS AUTOMATION")
 createToggle(BossPage, "Auto Boss", false, setAutoBoss)
 
-createButton(BossPage, "Attack Boss Once").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(BossPage, "Attack Boss Once")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     pcall(handleBoss)
-end)
+        end)
+    end
+end
 
 createSection(BossPage, "SCAN TARGETS")
 createLabel(BossPage, "  Boss / Events / EggBoss / GiantEgg")
@@ -1288,16 +1349,26 @@ createLabel(BossPage, "  Boss / Events / EggBoss / GiantEgg")
 
 createSection(TeleportPage, "TELEPORT LOCATIONS")
 
-createButton(TeleportPage, "Secret Waterfall").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(TeleportPage, "Secret Waterfall")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     updateStatus("Teleporting to Secret Waterfall...")
     moveTarget(CONFIG.WATERFALL_CFRAME)
     updateStatus("Arrived at Secret Waterfall")
-end)
+        end)
+    end
+end
 
-createButton(TeleportPage, "Treadmill").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(TeleportPage, "Treadmill")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     moveTarget(CONFIG.TREADMILL_CFRAME)
     updateStatus("Arrived at treadmill")
-end)
+        end)
+    end
+end
 
 ----------------------------------------------------------------
 -- ANTI PAGE
@@ -1312,22 +1383,32 @@ createSection(AntiPage, "WALK SPEED")
 
 local WalkSpeedLabel = createLabel(AntiPage, "  WalkSpeed: "..CONFIG.ANTI.WALK_SPEED)
 
-createButton(AntiPage, "Speed +2").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(AntiPage, "Speed +2")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     CONFIG.ANTI.WALK_SPEED += 2
     WalkSpeedLabel.Text = "  WalkSpeed: "..CONFIG.ANTI.WALK_SPEED
     pcall(function()
         local hum = getHumanoid()
         if hum then hum.WalkSpeed = CONFIG.ANTI.WALK_SPEED end
-    end)
+        end)
+    end
+end
 end)
 
-createButton(AntiPage, "Speed -2").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(AntiPage, "Speed -2")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     CONFIG.ANTI.WALK_SPEED = math.max(4, CONFIG.ANTI.WALK_SPEED - 2)
     WalkSpeedLabel.Text = "  WalkSpeed: "..CONFIG.ANTI.WALK_SPEED
     pcall(function()
         local hum = getHumanoid()
         if hum then hum.WalkSpeed = CONFIG.ANTI.WALK_SPEED end
-    end)
+        end)
+    end
+end
 end)
 
 ----------------------------------------------------------------
@@ -1362,10 +1443,15 @@ local RemoteLogLabel = createLabel(BypassPage, "  Remotes intercepted: 0")
 createSection(BypassPage, "BLOCKED REMOTES")
 createLabel(BypassPage, "  Add names in VT_BlockedRemotes table")
 
-createButton(BypassPage, "Copy Bypass Log").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(BypassPage, "Copy Bypass Log")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     toClipboard(table.concat(VT_LOG, "\n"))
     updateStatus("Bypass log copied")
-end)
+        end)
+    end
+end
 
 ----------------------------------------------------------------
 -- SETTINGS PAGE
@@ -1373,24 +1459,39 @@ end)
 
 createSection(SettingsPage, "UI SETTINGS")
 
-createButton(SettingsPage, "Hide UI").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(SettingsPage, "Hide UI")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
-end)
+        end)
+    end
+end
 
-createButton(SettingsPage, "Reset Counters").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(SettingsPage, "Reset Counters")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     FLAGS.EggsCollected      = 0
     FLAGS.BossAttacks        = 0
     FLAGS.EggsPerMinute      = 0
     CONFIG.SESSION.START_TICK = tick()
     updateDashboard()
     updateStatus("Counters reset")
-end)
+        end)
+    end
+end
 
-createButton(SettingsPage, "Unload Script").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(SettingsPage, "Unload Script")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     cleanupAll()
     pcall(function() ScreenGui:Destroy() end)
     print("[VAN THANH V4] Unloaded.")
-end)
+        end)
+    end
+end
 
 createLabel(SettingsPage, "  RightShift = Show / Hide UI")
 createLabel(SettingsPage, "  Van Thanh Executor V4")
@@ -1399,7 +1500,9 @@ createLabel(SettingsPage, "  Van Thanh Executor V4")
 -- CLOSE / KEYBIND
 ----------------------------------------------------------------
 
-CloseButton.MouseButton1Click:Connect(function()
+pcall(function()
+    if CloseButton and CloseButton.MouseButton1Click then
+        CloseButton.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
 end)
 
@@ -1457,7 +1560,9 @@ task.spawn(safeClosure(function()
         Text               = "",
     }, badge)
 
-    clickBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        if clickBtn and clickBtn.MouseButton1Click then
+            clickBtn.MouseButton1Click:Connect(function()
         MainFrame.Visible = not MainFrame.Visible
     end)
 
@@ -1776,14 +1881,24 @@ end)
 local FlySpeedLabel = createLabel(CheatPage,
     "  Fly Speed: " .. CHEAT.FlySpeed)
 
-createButton(CheatPage, "Fly Speed +10").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(CheatPage, "Fly Speed +10")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     CHEAT.FlySpeed = math.min(500, CHEAT.FlySpeed + 10)
     FlySpeedLabel.Text = "  Fly Speed: " .. CHEAT.FlySpeed
-end)
-createButton(CheatPage, "Fly Speed -10").MouseButton1Click:Connect(function()
+        end)
+    end
+end
+do
+    local __btn = createButton(CheatPage, "Fly Speed -10")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     CHEAT.FlySpeed = math.max(10, CHEAT.FlySpeed - 10)
     FlySpeedLabel.Text = "  Fly Speed: " .. CHEAT.FlySpeed
-end)
+        end)
+    end
+end
 
 createToggle(CheatPage, "Noclip", false, function(v)
     CHEAT.Noclip = v
@@ -1819,22 +1934,32 @@ createToggle(CheatPage, "Speed Hack", false, function(v)
     updateStatus(v and ("Speed Hack ON ("..CHEAT.SpeedValue..")") or "Speed Hack OFF")
 end)
 
-createButton(CheatPage, "Hack Speed +10").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(CheatPage, "Hack Speed +10")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     CHEAT.SpeedValue = math.min(500, CHEAT.SpeedValue + 10)
     SpeedHackLabel.Text = "  Hack Speed: " .. CHEAT.SpeedValue
     if CHEAT.SpeedHack then
         local hum = getHumanoid()
         if hum then hum.WalkSpeed = CHEAT.SpeedValue end
     end
-end)
-createButton(CheatPage, "Hack Speed -10").MouseButton1Click:Connect(function()
+        end)
+    end
+end
+do
+    local __btn = createButton(CheatPage, "Hack Speed -10")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     CHEAT.SpeedValue = math.max(16, CHEAT.SpeedValue - 10)
     SpeedHackLabel.Text = "  Hack Speed: " .. CHEAT.SpeedValue
     if CHEAT.SpeedHack then
         local hum = getHumanoid()
         if hum then hum.WalkSpeed = CHEAT.SpeedValue end
     end
-end)
+        end)
+    end
+end
 
 createSection(CheatPage, "SURVIVAL")
 
@@ -1867,14 +1992,24 @@ createToggle(CheatPage, "Auto Collect (Pull)", false, function(v)
     CHEAT.AutoCollect = v
 end)
 
-createButton(CheatPage, "Radius +20").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(CheatPage, "Radius +20")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     CHEAT.PullRadius = math.min(500, CHEAT.PullRadius + 20)
     PullRadiusLabel.Text = "  Pull Radius: " .. CHEAT.PullRadius
-end)
-createButton(CheatPage, "Radius -20").MouseButton1Click:Connect(function()
+        end)
+    end
+end
+do
+    local __btn = createButton(CheatPage, "Radius -20")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     CHEAT.PullRadius = math.max(20, CHEAT.PullRadius - 20)
     PullRadiusLabel.Text = "  Pull Radius: " .. CHEAT.PullRadius
-end)
+        end)
+    end
+end
 
 ----------------------------------------------------------------
 -- ESP SYSTEM
@@ -2084,19 +2219,34 @@ createSection(ESPPage, "ESP SETTINGS")
 local ESPDistLabel = createLabel(ESPPage,
     "  Max Distance: " .. ESP.MaxDist)
 
-createButton(ESPPage, "Distance +50").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(ESPPage, "Distance +50")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     ESP.MaxDist = math.min(2000, ESP.MaxDist + 50)
     ESPDistLabel.Text = "  Max Distance: " .. ESP.MaxDist
-end)
-createButton(ESPPage, "Distance -50").MouseButton1Click:Connect(function()
+        end)
+    end
+end
+do
+    local __btn = createButton(ESPPage, "Distance -50")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     ESP.MaxDist = math.max(50, ESP.MaxDist - 50)
     ESPDistLabel.Text = "  Max Distance: " .. ESP.MaxDist
-end)
+        end)
+    end
+end
 
-createButton(ESPPage, "Clear All ESP").MouseButton1Click:Connect(function()
+do
+    local __btn = createButton(ESPPage, "Clear All ESP")
+    if __btn and __btn.MouseButton1Click then
+        __btn.MouseButton1Click:Connect(function()
     clearAllESP()
     updateStatus("ESP cleared")
-end)
+        end)
+    end
+end
 
 createSection(ESPPage, "COLOR KEY")
 createLabel(ESPPage, "  🟡 Secret   🟣 Eternal   🟠 Divine")
