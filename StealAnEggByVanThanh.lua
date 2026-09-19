@@ -437,16 +437,55 @@ local function SafeTween(targetCFrame)
     if not root or not targetCFrame then return false end
     local dist = (root.Position - targetCFrame.Position).Magnitude
     if dist <= 2 then return true end
-    local speed    = math.max(tonumber(VanThanhConfig.StealSpeed) or 35, 10)
-    local duration = math.clamp(dist / speed, 0.1, 15)
-    local ok = pcall(function()
-        local tween = TweenService:Create(root,
-            TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
-            { CFrame = targetCFrame })
-        tween:Play()
-        tween.Completed:Wait()
+    local speed = math.max(tonumber(VanThanhConfig.StealSpeed) or 35, 10)
+
+    -- chia nhỏ hành trình thành nhiều bước ngắn
+    -- server thấy movement tự nhiên hơn, không phải teleport thẳng
+    local steps     = math.clamp(math.floor(dist / 20), 2, 6)
+    local startPos  = root.CFrame
+    local endPos    = targetCFrame
+
+    for i = 1, steps do
+        if not VanThanhConfig.AutoSteal then break end
+        local alpha    = i / steps
+        local stepCF   = startPos:Lerp(endPos, alpha)
+        local stepDist = (startPos.Position - stepCF.Position).Magnitude
+        local dur      = math.clamp(stepDist / speed, 0.05, 4)
+
+        -- jitter nhỏ tránh movement pattern quá đều
+        local jitter = CFrame.new(
+            math.random(-3,3) * 0.1,
+            0,
+            math.random(-3,3) * 0.1
+        )
+
+        local ok = pcall(function()
+            local tween = TweenService:Create(root,
+                TweenInfo.new(dur, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),
+                { CFrame = stepCF * jitter })
+            tween:Play()
+            tween.Completed:Wait()
+        end)
+        if not ok then break end
+
+        -- micro pause giữa các bước
+        task.wait(math.random(3, 8) / 100)
+    end
+
+    -- bước cuối đến đúng vị trí
+    pcall(function()
+        local finalDist = (root.Position - endPos.Position).Magnitude
+        if finalDist > 1 then
+            local finalDur = math.clamp(finalDist / speed, 0.05, 2)
+            local tween = TweenService:Create(root,
+                TweenInfo.new(finalDur, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+                { CFrame = endPos })
+            tween:Play()
+            tween.Completed:Wait()
+        end
     end)
-    return ok
+
+    return true
 end
 
 local function GetMyPlot()
@@ -493,15 +532,15 @@ end
 
 local function FirePromptSafe(prompt)
     if not prompt or not prompt:IsA("ProximityPrompt") then return false end
-    local _fpp = rawget(_G, "fireproximityprompt")
+    -- KHÔNG dùng fireproximityprompt — bị detect nặng (Error 267)
+    -- Dùng InputHold thuần — giống người chơi thật
     local ok = pcall(function()
-        if type(_fpp) == "function" then
-            _fpp(prompt)
-        else
-            prompt:InputHoldBegin()
-            task.wait(math.max(prompt.HoldDuration, 0.05))
-            prompt:InputHoldEnd()
-        end
+        prompt.Enabled = true
+        prompt:InputHoldBegin()
+        local holdTime = math.max(prompt.HoldDuration, 0.1)
+        -- random thêm delay nhỏ để tránh pattern detection
+        task.wait(holdTime + math.random(5, 15) / 100)
+        prompt:InputHoldEnd()
     end)
     return ok
 end
@@ -534,8 +573,13 @@ end
 -- MAIN LOOP AUTO STEAL
 ----------------------------------------------------------------
 
+-- delay ngẫu nhiên giữa mỗi steal cycle — tránh rate limit detection
+local function randomStealDelay()
+    task.wait(math.random(18, 35) / 10)  -- 1.8s - 3.5s random
+end
+
 task.spawn(function()
-    while task.wait(0.5) do
+    while task.wait(math.random(8,14) / 10) do  -- 0.8-1.4s loop, không đều
         if not VanThanhConfig.AutoSteal then continue end
         local ok, err = pcall(function()
             local root = GetRootPart()
@@ -567,11 +611,11 @@ task.spawn(function()
                         SafeTween(startCF)
                     end
                 end
-                task.wait(1)
+                randomStealDelay()
                 break
             end
         end)
-        if not ok then warn("[VAN THANH HUB] AutoSteal error:", err) task.wait(1) end
+        if not ok then warn("[VAN THANH HUB] AutoSteal error:", err) task.wait(2) end
     end
 end)
 
