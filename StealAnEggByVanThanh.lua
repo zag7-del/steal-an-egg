@@ -315,12 +315,19 @@ end
 
 if safeHook then
     pcall(function()
-        if isLClosure(LocalPlayer.Kick) then
-            safeHook(LocalPlayer.Kick, safeClosure(function(self, msg)
-                vtLog("KICK_BLOCK", "Intercepted: " .. (msg or "no reason"))
-                -- swallow the kick
+        -- Kick() là C-closure trên hầu hết executor, dùng hookmetamethod thay thế
+        local kickFn
+        pcall(function()
+            kickFn = LocalPlayer.Kick  -- có thể lỗi nếu member invalid
+        end)
+        if kickFn and isLClosure(kickFn) then
+            safeHook(kickFn, safeClosure(function(self, msg)
+                vtLog("KICK_BLOCK", "Intercepted: " .. tostring(msg or "no reason"))
             end))
             vtLog("HOOK", "LocalPlayer:Kick() nulled")
+        else
+            -- fallback: hook qua __namecall nếu đã có
+            vtLog("HOOK", "Kick() not lclosure — covered by __namecall hook")
         end
     end)
 
@@ -335,10 +342,27 @@ if safeHook then
     end)
 end
 
-addConn(LocalPlayer.Kicked:Connect(safeClosure(function(reason)
-    vtLog("KICKED_EVENT", "Reason: " .. (reason or "nil"))
-    doReconnect()
-end)))
+pcall(function()
+    if LocalPlayer:FindFirstChild("Kicked") or true then
+        addConn(LocalPlayer.OnTeleport:Connect(safeClosure(function(state)
+            if state == Enum.TeleportState.Failed then
+                vtLog("TELEPORT_FAIL", "Teleport failed, retrying...")
+                doReconnect()
+            end
+        end)))
+    end
+end)
+
+-- safe kick listener — game:GetService wraps avoid member errors
+pcall(function()
+    local ok, conn = pcall(function()
+        return LocalPlayer.Kicked:Connect(safeClosure(function(reason)
+            vtLog("KICKED_EVENT", "Reason: " .. tostring(reason or "nil"))
+            doReconnect()
+        end))
+    end)
+    if ok and conn then addConn(conn) end
+end)
 
 -- [6] HUMANOID PROPERTY SPOOF VIA __INDEX
 -- If game scans hum.WalkSpeed via __index meta, return vanilla value
@@ -413,10 +437,14 @@ task.spawn(safeClosure(function()
     while ENV.__VanThanhAC do
         task.wait(30)
         pcall(function()
-            if safeHook and isLClosure(LocalPlayer.Kick) then
-                safeHook(LocalPlayer.Kick, safeClosure(function(self, msg)
-                    vtLog("KICK_REBLOCK", "Re-intercepted: " .. (msg or ""))
-                end))
+            if safeHook then
+                local kickFn
+                pcall(function() kickFn = LocalPlayer.Kick end)
+                if kickFn and isLClosure(kickFn) then
+                    safeHook(kickFn, safeClosure(function(self, msg)
+                        vtLog("KICK_REBLOCK", "Re-intercepted: " .. tostring(msg or ""))
+                    end))
+                end
             end
         end)
         vtLog("INTEGRITY", "Hook integrity sweep done")
