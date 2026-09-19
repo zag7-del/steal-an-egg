@@ -1,6 +1,6 @@
 -- // ================= ================= ================= //
--- //               VĂN THÀNH HUB - FULL EDITION            //
--- //    Steal An Anime Egg - Full Anti-Ban & Bypass System //
+-- //         VĂN THÀNH HUB - STEALTH EDITION (SAFE)        //
+-- //    Steal An Anime Egg - No Metatable Hook / No Ban      //
 -- // ================= ================= ================= //
 
 local OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/jensonhirst/Orion/main/source'))()
@@ -12,103 +12,22 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local TeleportService = game:GetService("TeleportService")
 local UserInputService = game:GetService("UserInputService")
-local ScriptContext = game:GetService("ScriptContext")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 local RootPart = Character:WaitForChild("HumanoidRootPart")
 
--- Cập nhật nhân vật khi respawn
 LocalPlayer.CharacterAdded:Connect(function(newChar)
     Character = newChar
     Humanoid = newChar:WaitForChild("Humanoid")
     RootPart = newChar:WaitForChild("HumanoidRootPart")
 end)
 
--- =========================================================
--- [CORE] HỆ THỐNG ANTI-BAN & BYPASS ANTI-CHEAT HOÀN CHỈNH
--- =========================================================
-local rawMetatable = getrawmetatable(game)
-local oldNamecall = rawMetatable.__namecall
-local oldIndex = rawMetatable.__index
-setreadonly(rawMetatable, false)
-
-local blacklistedKeywords = {
-    "ban", "kick", "detect", "anticheat", "ac", "flag", 
-    "report", "speedcheck", "teleportcheck", "walkspeed", 
-    "log", "verify", "exploit", "security"
-}
-
-local function isSuspicious(name)
-    if not name then return false end
-    local lowerName = string.lower(tostring(name))
-    for _, keyword in ipairs(blacklistedKeywords) do
-        if string.find(lowerName, keyword) then
-            return true
-        end
-    end
-    return false
-end
-
--- 1. Hook __namecall: Chặn tất cả Remote báo cáo vi phạm về Server
-rawMetatable.__namecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    if (method == "FireServer" or method == "InvokeServer") and isSuspicious(self.Name) then
-        return nil
-    end
-    return oldNamecall(self, ...)
-end)
-
--- 2. Hook __index: Giả lập chỉ số nhân vật mặc định khi Anti-Cheat quét
-rawMetatable.__index = newcclosure(function(self, key)
-    if not checkcaller() and typeof(self) == "Instance" and self:IsA("Humanoid") then
-        if key == "WalkSpeed" then return 16 end
-        if key == "JumpPower" then return 50 end
-        if key == "HipHeight" then return 2 end
-    end
-    return oldIndex(self, key)
-end)
-
-setreadonly(rawMetatable, true)
-
--- 3. Tắt hệ thống bắt lỗi & log của Client
-pcall(function()
-    for _, connection in ipairs(getconnections(ScriptContext.Error)) do
-        connection:Disable()
-    end
-end)
-
--- 4. Vô hiệu hóa Client Anti-Cheat LocalScripts
-local function disableACScripts()
-    pcall(function()
-        local containers = {
-            LocalPlayer:FindFirstChildOfClass("PlayerScripts"),
-            LocalPlayer.Character,
-            game:GetService("ReplicatedFirst")
-        }
-        for _, parent in ipairs(containers) do
-            if parent then
-                for _, item in ipairs(parent:GetDescendants()) do
-                    if item:IsA("LocalScript") and isSuspicious(item.Name) then
-                        item.Disabled = true
-                    end
-                end
-            end
-        end
-    end)
-end
-
-disableACScripts()
-LocalPlayer.CharacterAdded:Connect(disableACScripts)
-
--- =========================================================
--- BẢNG CẤU HÌNH TOÀN BỘ HUB
--- =========================================================
+-- Cấu hình mặc định an toàn
 local VanThanhConfig = {
-    -- Steal Settings
     AutoSteal = false,
-    StealSpeed = 85,
+    StealSpeed = 35, -- Mức an toàn (tránh BAC-6517)
     ReturnToBase = true,
     StealRarities = {
         Secret = true,
@@ -119,247 +38,108 @@ local VanThanhConfig = {
         Uncommon = false,
         Common = false
     },
-    
-    -- Base & Egg Settings
     AutoPlace = false,
     AutoHatch = false,
     AutoEquipBest = false,
-    AutoUpgradeSlots = false,
-    
-    -- Upgrades & Rewards
     AutoUpgradeTreadmill = false,
     AutoUpgradePlot = false,
     AutoClaimPlaytime = false,
     AutoClaimIndex = false,
-    
-    -- Player & Movement
     WalkSpeed = 16,
     JumpPower = 50,
     ModifySpeed = false,
     ModifyJump = false,
     InfiniteJump = false,
     Noclip = false,
-    
-    -- System & Performance
-    AntiAFK = true,
-    Disable3D = false,
-    LowGraphics = false
+    AntiAFK = true
 }
 
--- KHỞI TẠO ORION UI
 local Window = OrionLib:MakeWindow({
-    Name = "Văn Thành Hub | Steal An Anime Egg 🥚 [ANTI-BAN EDITION]",
+    Name = "Văn Thành Hub | Steal An Anime Egg 🥚 [STEALTH]",
     HidePremium = false,
-    SaveConfig = true,
-    ConfigFolder = "VanThanhHub_Config",
-    IntroText = "Văn Thành Hub Premium Loading..."
+    SaveConfig = false,
+    IntroText = "Văn Thành Hub Stealth Loaded!"
 })
 
--- ==========================================
--- TAB 1: TỰ ĐỘNG FARM & TRỘM TRỨNG (AUTO FARM)
--- ==========================================
-local TabFarm = Window:MakeTab({
-    Name = "Auto Farm & Steal",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-TabFarm:AddSection({ Name = "🔥 Cấu Hình Trộm Trứng (Auto Steal)" })
+-- TAB 1: AUTO FARM
+local TabFarm = Window:MakeTab({ Name = "Auto Farm & Steal", Icon = "rbxassetid://4483345998" })
 
 TabFarm:AddToggle({
-    Name = "Bật Tự Động Trộm Trứng (Auto Steal)",
-    Default = VanThanhConfig.AutoSteal,
-    Callback = function(Value)
-        VanThanhConfig.AutoSteal = Value
-    end
+    Name = "Bật Auto Steal",
+    Default = false,
+    Callback = function(Value) VanThanhConfig.AutoSteal = Value end
 })
 
 TabFarm:AddToggle({
-    Name = "Tự Động Quay Về Căn Cứ Sau Khi Trộm",
-    Default = VanThanhConfig.ReturnToBase,
-    Callback = function(Value)
-        VanThanhConfig.ReturnToBase = Value
-    end
+    Name = "Quay Về Căn Cứ Sau Khi Trộm",
+    Default = true,
+    Callback = function(Value) VanThanhConfig.ReturnToBase = Value end
 })
 
 TabFarm:AddSlider({
-    Name = "Tốc Độ Di Chuyển Trộm (Tween Speed)",
-    Min = 30,
-    Max = 180,
-    Default = VanThanhConfig.StealSpeed,
-    Color = Color3.fromRGB(255, 85, 85),
+    Name = "Tốc Độ Di Chuyển (Khuyên dùng: 30 - 40)",
+    Min = 20,
+    Max = 60,
+    Default = 35,
+    Color = Color3.fromRGB(0, 255, 127),
     Increment = 5,
     ValueName = "Speed",
-    Callback = function(Value)
-        VanThanhConfig.StealSpeed = Value
-    end
+    Callback = function(Value) VanThanhConfig.StealSpeed = Value end
 })
 
-TabFarm:AddSection({ Name = "🎯 Lọc Độ Hiếm Trứng Trộm" })
-
+TabFarm:AddSection({ Name = "Độ Hiếm Trứng" })
 local Rarities = {"Secret", "Mythic", "Legendary", "Epic", "Rare", "Uncommon", "Common"}
 for _, rarity in ipairs(Rarities) do
     TabFarm:AddToggle({
-        Name = "Trộm Trứng: " .. rarity,
+        Name = "Trộm: " .. rarity,
         Default = VanThanhConfig.StealRarities[rarity] or false,
-        Callback = function(Value)
-            VanThanhConfig.StealRarities[rarity] = Value
-        end
+        Callback = function(Value) VanThanhConfig.StealRarities[rarity] = Value end
     })
 end
 
-TabFarm:AddSection({ Name = "🥚 Quản Lý Trứng & Căn Cứ" })
-
+TabFarm:AddSection({ Name = "Quản Lý Trứng" })
 TabFarm:AddToggle({
-    Name = "Tự Động Đặt Trứng Vào Căn Cứ (Auto Place)",
-    Default = VanThanhConfig.AutoPlace,
-    Callback = function(Value)
-        VanThanhConfig.AutoPlace = Value
-    end
+    Name = "Auto Place Egg",
+    Default = false,
+    Callback = function(Value) VanThanhConfig.AutoPlace = Value end
 })
-
 TabFarm:AddToggle({
-    Name = "Tự Động Ấp Trứng Ngay (Auto Hatch)",
-    Default = VanThanhConfig.AutoHatch,
-    Callback = function(Value)
-        VanThanhConfig.AutoHatch = Value
-    end
-})
-
-TabFarm:AddToggle({
-    Name = "Tự Động Trang Bị Anime Mạnh Nhất",
-    Default = VanThanhConfig.AutoEquipBest,
-    Callback = function(Value)
-        VanThanhConfig.AutoEquipBest = Value
-    end
-})
-
--- ==========================================
--- TAB 2: NÂNG CẤP & NHẬN THƯỞNG (UPGRADES)
--- ==========================================
-local TabUpgrades = Window:MakeTab({
-    Name = "Nâng Cấp & Quà",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-TabUpgrades:AddSection({ Name = "⚡ Tự Động Nâng Cấp Base" })
-
-TabUpgrades:AddToggle({
-    Name = "Auto Upgrade Treadmill",
-    Default = VanThanhConfig.AutoUpgradeTreadmill,
-    Callback = function(Value)
-        VanThanhConfig.AutoUpgradeTreadmill = Value
-    end
-})
-
-TabUpgrades:AddToggle({
-    Name = "Auto Upgrade Plot",
-    Default = VanThanhConfig.AutoUpgradePlot,
-    Callback = function(Value)
-        VanThanhConfig.AutoUpgradePlot = Value
-    end
-})
-
-TabUpgrades:AddSection({ Name = "🎁 Tự Động Nhận Thưởng" })
-
-TabUpgrades:AddToggle({
-    Name = "Auto Claim Online Rewards",
-    Default = VanThanhConfig.AutoClaimPlaytime,
-    Callback = function(Value)
-        VanThanhConfig.AutoClaimPlaytime = Value
-    end
-})
-
-TabUpgrades:AddToggle({
-    Name = "Auto Claim Index / Bộ Sưu Tập",
-    Default = VanThanhConfig.AutoClaimIndex,
-    Callback = function(Value)
-        VanThanhConfig.AutoClaimIndex = Value
-    end
-})
-
--- ==========================================
--- TAB 3: DI CHUYỂN & NHÂN VẬT (PLAYER)
--- ==========================================
-local TabPlayer = Window:MakeTab({
-    Name = "Nhân Vật / Hack",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-TabPlayer:AddSection({ Name = "🏃 Chỉ Số Di Chuyển (Spoofed)" })
-
-TabPlayer:AddToggle({
-    Name = "Kích Hoạt Chỉnh WalkSpeed",
+    Name = "Auto Hatch",
     Default = false,
-    Callback = function(Value)
-        VanThanhConfig.ModifySpeed = Value
-    end
+    Callback = function(Value) VanThanhConfig.AutoHatch = Value end
 })
 
-TabPlayer:AddSlider({
-    Name = "Tốc Độ Chạy (WalkSpeed)",
-    Min = 16,
-    Max = 300,
-    Default = 16,
-    Color = Color3.fromRGB(0, 255, 127),
-    Increment = 2,
-    ValueName = "Speed",
-    Callback = function(Value)
-        VanThanhConfig.WalkSpeed = Value
-    end
-})
+-- TAB 2: UTILITIES
+local TabUtil = Window:MakeTab({ Name = "Tiện Ích & Player", Icon = "rbxassetid://4483345998" })
 
-TabPlayer:AddToggle({
-    Name = "Kích Hoạt Chỉnh JumpPower",
+TabUtil:AddToggle({
+    Name = "Noclip (Chạy Xuyên Tường)",
     Default = false,
-    Callback = function(Value)
-        VanThanhConfig.ModifyJump = Value
-    end
+    Callback = function(Value) VanThanhConfig.Noclip = Value end
 })
 
-TabPlayer:AddSlider({
-    Name = "Sức Nhảy (JumpPower)",
-    Min = 50,
-    Max = 400,
-    Default = 50,
-    Color = Color3.fromRGB(0, 191, 255),
-    Increment = 5,
-    ValueName = "Power",
-    Callback = function(Value)
-        VanThanhConfig.JumpPower = Value
-    end
-})
-
-TabPlayer:AddSection({ Name = "👻 Gian Lận Di Chuyển" })
-
-TabPlayer:AddToggle({
-    Name = "Nhảy Vô Tận (Infinite Jump)",
+TabUtil:AddToggle({
+    Name = "Infinite Jump",
     Default = false,
-    Callback = function(Value)
-        VanThanhConfig.InfiniteJump = Value
-    end
+    Callback = function(Value) VanThanhConfig.InfiniteJump = Value end
 })
 
-TabPlayer:AddToggle({
-    Name = "Đi Xuyên Tường (Noclip)",
-    Default = false,
-    Callback = function(Value)
-        VanThanhConfig.Noclip = Value
-    end
+TabUtil:AddToggle({
+    Name = "Anti AFK",
+    Default = true,
+    Callback = function(Value) VanThanhConfig.AntiAFK = Value end
 })
 
--- ==========================================
--- TAB 4: DỊCH CHUYỂN (TELEPORT)
--- ==========================================
-local TabTeleport = Window:MakeTab({
-    Name = "Dịch Chuyển",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-TabTeleport:AddSection({ Name = "📌 Vị Trí Cố Định" })
+-- LOGIC DI CHUYỂN AN TOÀN
+local function SafeTween(targetCFrame)
+    if not RootPart then return end
+    local distance = (RootPart.Position - targetCFrame.Position).Magnitude
+    local duration = distance / math.max(VanThanhConfig.StealSpeed, 10)
+    
+    local tween = TweenService:Create(RootPart, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = targetCFrame})
+    tween:Play()
+    tween.Completed:Wait()
+end
 
 local function GetMyPlot()
     local plots = Workspace:FindFirstChild("Plots") or Workspace:FindFirstChild("StealZones")
@@ -373,145 +153,9 @@ local function GetMyPlot()
     return nil
 end
 
-TabTeleport:AddButton({
-    Name = "Về Căn Cứ Của Tôi",
-    Callback = function()
-        local myPlot = GetMyPlot()
-        if myPlot and RootPart then
-            RootPart.CFrame = myPlot:GetPivot() + Vector3.new(0, 5, 0)
-        end
-    end
-})
-
-TabTeleport:AddButton({
-    Name = "Đến Khu Vực Trung Tâm (Spawn)",
-    Callback = function()
-        local spawnLocation = Workspace:FindFirstChild("SpawnLocation") or Workspace:FindFirstChild("Spawns")
-        if spawnLocation and RootPart then
-            RootPart.CFrame = spawnLocation:GetPivot() + Vector3.new(0, 5, 0)
-        end
-    end
-})
-
--- ==========================================
--- TAB 5: TỐI ƯU & HỆ THỐNG (SYSTEM)
--- ==========================================
-local TabSystem = Window:MakeTab({
-    Name = "Tối Ưu & Hệ Thống",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-TabSystem:AddSection({ Name = "🚀 Tối Ưu Máy Treo Game (FPS Boost)" })
-
-TabSystem:AddToggle({
-    Name = "Tắt Render 3D (Giảm Lag Max CPU/GPU)",
-    Default = false,
-    Callback = function(Value)
-        VanThanhConfig.Disable3D = Value
-        RunService:Set3dRenderingEnabled(not Value)
-    end
-})
-
-TabSystem:AddToggle({
-    Name = "Xóa Chi Tiết Đồ Họa (Low Graphics)",
-    Default = false,
-    Callback = function(Value)
-        VanThanhConfig.LowGraphics = Value
-        if Value then
-            for _, v in ipairs(Workspace:GetDescendants()) do
-                if v:IsA("BasePart") then
-                    v.Material = Enum.Material.SmoothPlastic
-                elseif v:IsA("Decal") or v:IsA("Texture") then
-                    v:Destroy()
-                end
-            end
-        end
-    end
-})
-
-TabSystem:AddToggle({
-    Name = "Chống AFK (Anti Disconnect)",
-    Default = true,
-    Callback = function(Value)
-        VanThanhConfig.AntiAFK = Value
-    end
-})
-
-TabSystem:AddSection({ Name = "🌐 Quản Lý Server" })
-
-TabSystem:AddButton({
-    Name = "Vào Lại Server (Rejoin)",
-    Callback = function()
-        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
-    end
-})
-
-TabSystem:AddButton({
-    Name = "Đổi Server Khác (Server Hop)",
-    Callback = function()
-        TeleportService:Teleport(game.PlaceId, LocalPlayer)
-    end
-})
-
--- ==========================================
--- HỆ THỐNG LOGIC CHẠY NGẦM (CORE ENGINE)
--- ==========================================
-
--- 1. Safe Move bypass Velocity Check
-local function VanThanhSafeMove(targetCFrame)
-    if not RootPart then return end
-    
-    RootPart.Velocity = Vector3.new(0, 0, 0)
-    
-    local distance = (RootPart.Position - targetCFrame.Position).Magnitude
-    local duration = distance / math.max(VanThanhConfig.StealSpeed, 10)
-    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(RootPart, tweenInfo, {CFrame = targetCFrame})
-    
-    tween:Play()
-    tween.Completed:Wait()
-    
-    RootPart.Velocity = Vector3.new(0, 0, 0)
-end
-
--- 2. Anti-AFK
-LocalPlayer.Idled:Connect(function()
-    if VanThanhConfig.AntiAFK then
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new(0, 0))
-    end
-end)
-
--- 3. Noclip & Speed Bypass
-RunService.Stepped:Connect(function()
-    if VanThanhConfig.Noclip and Character then
-        for _, part in ipairs(Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-    end
-    
-    if Humanoid then
-        if VanThanhConfig.ModifySpeed then
-            Humanoid.WalkSpeed = VanThanhConfig.WalkSpeed
-        end
-        if VanThanhConfig.ModifyJump then
-            Humanoid.JumpPower = VanThanhConfig.JumpPower
-        end
-    end
-end)
-
-UserInputService.JumpRequest:Connect(function()
-    if VanThanhConfig.InfiniteJump and Humanoid then
-        Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-    end
-end)
-
--- 4. Dynamic Auto Steal Loop
+-- MAIN LOOP AUTO STEAL
 task.spawn(function()
-    while task.wait(0.4) do
+    while task.wait(0.5) do
         if VanThanhConfig.AutoSteal then
             pcall(function()
                 local plots = Workspace:FindFirstChild("Plots") or Workspace:FindFirstChild("StealZones")
@@ -525,22 +169,23 @@ task.spawn(function()
                                 local rarity = parent and (parent:GetAttribute("Rarity") or parent.Name)
                                 
                                 if rarity and VanThanhConfig.StealRarities[rarity] then
-                                    local originalCFrame = RootPart.CFrame
+                                    local startCFrame = RootPart.CFrame
                                     
-                                    VanThanhSafeMove(parent.CFrame + Vector3.new(0, 3, 0))
-                                    task.wait(0.15)
+                                    SafeTween(parent.CFrame + Vector3.new(0, 3, 0))
+                                    task.wait(0.4) -- Delay an toàn để Server ghi nhận vị trí
                                     
                                     fireproximityprompt(prompt)
-                                    task.wait(0.25)
+                                    task.wait(0.5)
                                     
                                     if VanThanhConfig.ReturnToBase then
                                         local myPlot = GetMyPlot()
                                         if myPlot then
-                                            VanThanhSafeMove(myPlot:GetPivot() + Vector3.new(0, 5, 0))
+                                            SafeTween(myPlot:GetPivot() + Vector3.new(0, 5, 0))
                                         else
-                                            VanThanhSafeMove(originalCFrame)
+                                            SafeTween(startCFrame)
                                         end
                                     end
+                                    task.wait(1) -- Khoảng nghỉ giữa các lần trộm
                                     break
                                 end
                             end
@@ -552,71 +197,27 @@ task.spawn(function()
     end
 end)
 
--- 5. Auto Place & Hatch
-task.spawn(function()
-    while task.wait(1) do
-        if VanThanhConfig.AutoPlace then
-            pcall(function()
-                local net = ReplicatedStorage:FindFirstChild("Network") or ReplicatedStorage:FindFirstChild("Events")
-                local rem = net and (net:FindFirstChild("PlaceEgg") or net:FindFirstChild("Place"))
-                if rem then rem:FireServer() end
-            end)
-        end
-
-        if VanThanhConfig.AutoHatch then
-            pcall(function()
-                local net = ReplicatedStorage:FindFirstChild("Network") or ReplicatedStorage:FindFirstChild("Events")
-                local rem = net and (net:FindFirstChild("HatchNow") or net:FindFirstChild("Hatch"))
-                if rem then rem:FireServer() end
-            end)
+-- NOCLIP & JUMP
+RunService.Stepped:Connect(function()
+    if VanThanhConfig.Noclip and Character then
+        for _, part in ipairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
         end
     end
 end)
 
--- 6. Upgrades & Rewards Loops
-task.spawn(function()
-    while task.wait(2) do
-        if VanThanhConfig.AutoUpgradeTreadmill then
-            pcall(function()
-                local rem = ReplicatedStorage:FindFirstChild("UpgradeTreadmill", true)
-                if rem then rem:FireServer() end
-            end)
-        end
-
-        if VanThanhConfig.AutoUpgradePlot then
-            pcall(function()
-                local rem = ReplicatedStorage:FindFirstChild("UpgradePlot", true)
-                if rem then rem:FireServer() end
-            end)
-        end
-
-        if VanThanhConfig.AutoClaimPlaytime then
-            pcall(function()
-                local rem = ReplicatedStorage:FindFirstChild("ClaimPlaytime", true) or ReplicatedStorage:FindFirstChild("ClaimReward", true)
-                if rem then rem:FireServer() end
-            end)
-        end
-        
-        if VanThanhConfig.AutoClaimIndex then
-            pcall(function()
-                local rem = ReplicatedStorage:FindFirstChild("ClaimIndex", true)
-                if rem then rem:FireServer() end
-            end)
-        end
+UserInputService.JumpRequest:Connect(function()
+    if VanThanhConfig.InfiniteJump and Humanoid then
+        Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
     end
 end)
 
--- 7. Auto Equip Best Loop
-task.spawn(function()
-    while task.wait(5) do
-        if VanThanhConfig.AutoEquipBest then
-            pcall(function()
-                local rem = ReplicatedStorage:FindFirstChild("EquipBest", true)
-                if rem then rem:FireServer() end
-            end)
-        end
+-- ANTI AFK
+LocalPlayer.Idled:Connect(function()
+    if VanThanhConfig.AntiAFK then
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new(0, 0))
     end
 end)
 
--- Khởi chạy giao diện Orion
 OrionLib:Init()
