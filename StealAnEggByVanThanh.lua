@@ -20,20 +20,45 @@ ENV.__VanThanhV4   = true
 ENV.__VanThanhAC   = true
 ENV.__StealEggV4   = true
 
-local safeRef = (typeof(cloneref) == "function")
-    and cloneref or function(x) return x end
+-- safe global checker — works even if the global doesn't exist
+local function hasGlobal(name)
+    return rawget(_G, name) ~= nil
+        or (type(getfenv) == "function" and pcall(function() return getfenv(0)[name] end))
+        or pcall(function()
+            local _ = (getgenv and getgenv() or _G)[name]
+        end)
+end
 
-local safeClosure = (typeof(newcclosure) == "function")
-    and newcclosure or function(f) return f end
+local function getGlobal(name)
+    if getgenv then
+        local ok, v = pcall(function() return getgenv()[name] end)
+        if ok and v ~= nil then return v end
+    end
+    local ok2, v2 = pcall(function() return _G[name] end)
+    if ok2 and v2 ~= nil then return v2 end
+    return nil
+end
 
-local safeHook = (typeof(hookfunction) == "function")
-    and hookfunction or nil
+local _cloneref      = getGlobal("cloneref")
+local _newcclosure   = getGlobal("newcclosure")
+local _hookfunction  = getGlobal("hookfunction")
+local _hookmetamethod= getGlobal("hookmetamethod")
+local _islclosure    = getGlobal("islclosure")
 
-local hookMeta = (typeof(hookmetamethod) == "function")
-    and hookmetamethod or nil
+local safeRef = (type(_cloneref) == "function")
+    and _cloneref or function(x) return x end
 
-local isLClosure = (typeof(islclosure) == "function")
-    and islclosure or function() return true end
+local safeClosure = (type(_newcclosure) == "function")
+    and _newcclosure or function(f) return f end
+
+local safeHook = (type(_hookfunction) == "function")
+    and _hookfunction or nil
+
+local hookMeta = (type(_hookmetamethod) == "function")
+    and _hookmetamethod or nil
+
+local isLClosure = (type(_islclosure) == "function")
+    and _islclosure or function() return true end
 
 local function getUIParent()
     -- try syn protect_gui
@@ -47,7 +72,7 @@ local function getUIParent()
         if ok and gui then return gui end
     end
     -- try gethui
-    if typeof(gethui) == "function" then
+    if type(getGlobal("gethui")) == "function" then
         local ok, h = pcall(gethui)
         if ok and h then return h end
     end
@@ -65,12 +90,12 @@ local function getUIParent()
 end
 
 local function firePrompt(prompt)
-    if typeof(fireproximityprompt) == "function" then
-        pcall(fireproximityprompt, prompt)
-    elseif typeof(fireclickdetector) == "function" then
+    if type(getGlobal("fireproximityprompt")) == "function" then
+        pcall(getGlobal("fireproximityprompt"), prompt)
+    elseif type(getGlobal("fireclickdetector")) == "function" then
         local cd = prompt.Parent
             and prompt.Parent:FindFirstChildOfClass("ClickDetector")
-        if cd then pcall(fireclickdetector, cd) end
+        if cd then pcall(getGlobal("fireclickdetector"), cd) end
     else
         pcall(function()
             prompt:InputHoldBegin()
@@ -81,9 +106,9 @@ local function firePrompt(prompt)
 end
 
 local function toClipboard(text)
-    if setclipboard then pcall(setclipboard, text)
-    elseif syn and syn.write_clipboard then pcall(syn.write_clipboard, text)
-    elseif Clipboard then pcall(function() Clipboard.set(text) end)
+    local _sc = getGlobal("setclipboard") if _sc then pcall(_sc, text)
+    elseif type(getGlobal("syn")) == "table" and getGlobal("syn").write_clipboard then pcall(getGlobal("syn").write_clipboard, text)
+    elseif getGlobal("Clipboard") then pcall(function() getGlobal("Clipboard").set(text) end)
     end
 end
 
@@ -255,16 +280,16 @@ end
 -- [3] SCRIPT IDENTITY MASKER
 -- Spoof executor identity level to CoreScript (7)
 
-if typeof(getscriptidentity) == "function" and safeHook then
-    local real_gsi = getscriptidentity
+if type(getGlobal("getscriptidentity")) == "function" and safeHook then
+    local real_gsi = getGlobal("getscriptidentity")
     safeHook(real_gsi, safeClosure(function(...)
         return 7
     end))
     vtLog("HOOK", "getscriptidentity masked → 7")
 end
 
-if typeof(identifyexecutor) == "function" and safeHook then
-    local real_ie = identifyexecutor
+if type(getGlobal("identifyexecutor")) == "function" and safeHook then
+    local real_ie = getGlobal("identifyexecutor")
     safeHook(real_ie, safeClosure(function()
         return "Roblox", "0.0.0"
     end))
@@ -477,7 +502,7 @@ task.spawn(safeClosure(function()
         task.wait(CONFIG.ANTI.AFK_INTERVAL)
         if not FLAGS.Running then break end
         pcall(function()
-            local vim = typeof(VirtualInputManager) ~= "nil" and VirtualInputManager or nil
+            local vim = getGlobal("VirtualInputManager")
             if vim then
                 vim:SendMouseButtonEvent(0,0,0,true,game,1)
                 task.wait(0.05)
@@ -830,8 +855,9 @@ local function handleBoss()
     for _, desc in ipairs(boss:GetDescendants()) do
         if desc:IsA("ClickDetector") then
             pcall(function()
-                if typeof(fireclickdetector) == "function" then
-                    fireclickdetector(desc)
+                local _fcd2 = getGlobal("fireclickdetector")
+                if type(_fcd2) == "function" then
+                    _fcd2(desc)
                 end
             end)
         end
@@ -1430,8 +1456,8 @@ end
 
 bypassStatusLabel("__namecall hook (remote shield)",  hookMeta ~= nil)
 bypassStatusLabel("debug.info spoofed",               safeHook ~= nil)
-bypassStatusLabel("getscriptidentity masked",         typeof(getscriptidentity)=="function")
-bypassStatusLabel("identifyexecutor spoofed",         typeof(identifyexecutor)=="function")
+bypassStatusLabel("getscriptidentity masked",         type(getGlobal("getscriptidentity"))=="function")
+bypassStatusLabel("identifyexecutor spoofed",         type(getGlobal("identifyexecutor"))=="function")
 bypassStatusLabel("HTTP fingerprint filter",          safeHook ~= nil)
 bypassStatusLabel("Kick bypass active",               safeHook ~= nil)
 bypassStatusLabel("game:Shutdown() intercepted",      safeHook ~= nil)
