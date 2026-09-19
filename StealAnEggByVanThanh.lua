@@ -290,7 +290,7 @@ end)
 
 local VanThanhConfig = {
     AutoSteal    = false,
-    StealSpeed   = 35,
+    StealSpeed   = 16,  -- khớp WalkSpeed mặc định, tránh detect
     ReturnToBase = true,
     StealRarities = {
         Secret   = true,
@@ -386,15 +386,19 @@ local function boolStr(v) return v and "✅ ACTIVE" or "❌ NOT AVAILABLE" end
 
 local _G_store = (rawget(_G,"getgenv") and rawget(_G,"getgenv")()) or _G
 
-TabBypass:AddLabel({ Name = "__namecall Shield: "     .. boolStr(rawget(_G,"hookmetamethod")~=nil) })
-TabBypass:AddLabel({ Name = "Kick Bypass: "           .. boolStr(rawget(_G,"hookfunction")~=nil) })
-TabBypass:AddLabel({ Name = "HTTP Filter: "           .. boolStr(rawget(_G,"hookfunction")~=nil) })
-TabBypass:AddLabel({ Name = "Identity Spoof: "        .. boolStr(rawget(_G,"getscriptidentity")~=nil) })
-TabBypass:AddLabel({ Name = "Executor Spoof: "        .. boolStr(rawget(_G,"identifyexecutor")~=nil) })
-TabBypass:AddLabel({ Name = "debug.info Spoof: "      .. boolStr(rawget(_G,"hookfunction")~=nil) })
-TabBypass:AddLabel({ Name = "Error Sink: ✅ ACTIVE" })
-TabBypass:AddLabel({ Name = "Env Wipe: ✅ ACTIVE" })
-TabBypass:AddLabel({ Name = "Integrity Loop: ✅ ACTIVE" })
+-- Orion AddLabel nhận string thẳng, không phải table
+local function BPLabel(text)
+    pcall(function() TabBypass:AddLabel(text) end)
+end
+BPLabel("__namecall Shield: "  .. boolStr(rawget(_G,"hookmetamethod")~=nil))
+BPLabel("Kick Bypass: "        .. boolStr(rawget(_G,"hookfunction")~=nil))
+BPLabel("HTTP Filter: "        .. boolStr(rawget(_G,"hookfunction")~=nil))
+BPLabel("Identity Spoof: "     .. boolStr(rawget(_G,"getscriptidentity")~=nil))
+BPLabel("Executor Spoof: "     .. boolStr(rawget(_G,"identifyexecutor")~=nil))
+BPLabel("debug.info Spoof: "   .. boolStr(rawget(_G,"hookfunction")~=nil))
+BPLabel("Error Sink: ACTIVE")
+BPLabel("Env Wipe: ACTIVE")
+BPLabel("Integrity Loop: ACTIVE")
 
 TabBypass:AddSection({ Name = "Remote Log" })
 TabBypass:AddButton({
@@ -445,40 +449,55 @@ local function SafeTween(targetCFrame)
     local startPos  = root.CFrame
     local endPos    = targetCFrame
 
-    for i = 1, steps do
-        if not VanThanhConfig.AutoSteal then break end
-        local alpha    = i / steps
-        local stepCF   = startPos:Lerp(endPos, alpha)
-        local stepDist = (startPos.Position - stepCF.Position).Magnitude
-        local dur      = math.clamp(stepDist / speed, 0.05, 4)
-
-        -- jitter nhỏ tránh movement pattern quá đều
-        local jitter = CFrame.new(
-            math.random(-3,3) * 0.1,
-            0,
-            math.random(-3,3) * 0.1
-        )
-
-        local ok = pcall(function()
-            local tween = TweenService:Create(root,
-                TweenInfo.new(dur, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),
-                { CFrame = stepCF * jitter })
-            tween:Play()
-            tween.Completed:Wait()
-        end)
-        if not ok then break end
-
-        -- micro pause giữa các bước
-        task.wait(math.random(3, 8) / 100)
+    -- dùng Humanoid:MoveTo thay vì TweenService trên root
+    -- server nhận movement qua Humanoid state machine → tự nhiên hơn
+    local hum = Character and Character:FindFirstChildOfClass("Humanoid")
+    if not hum then
+        -- fallback nếu không có humanoid
+        pcall(function() root.CFrame = endPos end)
+        return true
     end
 
-    -- bước cuối đến đúng vị trí
+    local targetPos = endPos.Position
+    local oldSpeed  = hum.WalkSpeed
+
+    -- set tốc độ theo config
+    pcall(function() hum.WalkSpeed = speed end)
+
+    -- MoveTo với timeout
+    local arrived   = false
+    local timeout   = math.clamp(dist / math.max(speed, 1) + 3, 2, 20)
+    local startTime = tick()
+
+    hum:MoveTo(targetPos)
+
+    -- poll đến khi đến nơi hoặc timeout
+    local moveConn
+    moveConn = hum.MoveToFinished:Connect(function(reached)
+        arrived = true
+    end)
+
+    while not arrived and (tick() - startTime) < timeout do
+        if not VanThanhConfig.AutoSteal then break end
+        -- re-issue MoveTo mỗi 3s phòng stuck
+        if (tick() - startTime) % 3 < 0.1 then
+            hum:MoveTo(targetPos)
+        end
+        task.wait(0.1)
+    end
+
+    pcall(function() moveConn:Disconnect() end)
+
+    -- restore speed
+    pcall(function() hum.WalkSpeed = oldSpeed end)
+
+    -- bước cuối snap nhẹ nếu vẫn còn cách xa
     pcall(function()
-        local finalDist = (root.Position - endPos.Position).Magnitude
-        if finalDist > 1 then
-            local finalDur = math.clamp(finalDist / speed, 0.05, 2)
+        local remaining = (root.Position - targetPos).Magnitude
+        if remaining > 8 then
+            -- vẫn còn xa, tween nhẹ
             local tween = TweenService:Create(root,
-                TweenInfo.new(finalDur, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+                TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
                 { CFrame = endPos })
             tween:Play()
             tween.Completed:Wait()
@@ -575,7 +594,9 @@ end
 
 -- delay ngẫu nhiên giữa mỗi steal cycle — tránh rate limit detection
 local function randomStealDelay()
-    task.wait(math.random(18, 35) / 10)  -- 1.8s - 3.5s random
+    -- delay dài hơn: 4s - 9s giữa mỗi steal
+    -- game detect rate, không phải action đơn lẻ
+    task.wait(math.random(40, 90) / 10)
 end
 
 task.spawn(function()
