@@ -1,6 +1,6 @@
 -- // ================= ================= ================= //
 -- //               VĂN THÀNH HUB - FULL EDITION            //
--- //          Steal An Anime Egg - Complete Feature Set    //
+-- //    Steal An Anime Egg - Full Anti-Ban & Bypass System //
 -- // ================= ================= ================= //
 
 local OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/jensonhirst/Orion/main/source'))()
@@ -12,6 +12,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local TeleportService = game:GetService("TeleportService")
 local UserInputService = game:GetService("UserInputService")
+local ScriptContext = game:GetService("ScriptContext")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -25,7 +26,85 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     RootPart = newChar:WaitForChild("HumanoidRootPart")
 end)
 
+-- =========================================================
+-- [CORE] HỆ THỐNG ANTI-BAN & BYPASS ANTI-CHEAT HOÀN CHỈNH
+-- =========================================================
+local rawMetatable = getrawmetatable(game)
+local oldNamecall = rawMetatable.__namecall
+local oldIndex = rawMetatable.__index
+setreadonly(rawMetatable, false)
+
+local blacklistedKeywords = {
+    "ban", "kick", "detect", "anticheat", "ac", "flag", 
+    "report", "speedcheck", "teleportcheck", "walkspeed", 
+    "log", "verify", "exploit", "security"
+}
+
+local function isSuspicious(name)
+    if not name then return false end
+    local lowerName = string.lower(tostring(name))
+    for _, keyword in ipairs(blacklistedKeywords) do
+        if string.find(lowerName, keyword) then
+            return true
+        end
+    end
+    return false
+end
+
+-- 1. Hook __namecall: Chặn tất cả Remote báo cáo vi phạm về Server
+rawMetatable.__namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    if (method == "FireServer" or method == "InvokeServer") and isSuspicious(self.Name) then
+        return nil
+    end
+    return oldNamecall(self, ...)
+end)
+
+-- 2. Hook __index: Giả lập chỉ số nhân vật mặc định khi Anti-Cheat quét
+rawMetatable.__index = newcclosure(function(self, key)
+    if not checkcaller() and typeof(self) == "Instance" and self:IsA("Humanoid") then
+        if key == "WalkSpeed" then return 16 end
+        if key == "JumpPower" then return 50 end
+        if key == "HipHeight" then return 2 end
+    end
+    return oldIndex(self, key)
+end)
+
+setreadonly(rawMetatable, true)
+
+-- 3. Tắt hệ thống bắt lỗi & log của Client
+pcall(function()
+    for _, connection in ipairs(getconnections(ScriptContext.Error)) do
+        connection:Disable()
+    end
+end)
+
+-- 4. Vô hiệu hóa Client Anti-Cheat LocalScripts
+local function disableACScripts()
+    pcall(function()
+        local containers = {
+            LocalPlayer:FindFirstChildOfClass("PlayerScripts"),
+            LocalPlayer.Character,
+            game:GetService("ReplicatedFirst")
+        }
+        for _, parent in ipairs(containers) do
+            if parent then
+                for _, item in ipairs(parent:GetDescendants()) do
+                    if item:IsA("LocalScript") and isSuspicious(item.Name) then
+                        item.Disabled = true
+                    end
+                end
+            end
+        end
+    end)
+end
+
+disableACScripts()
+LocalPlayer.CharacterAdded:Connect(disableACScripts)
+
+-- =========================================================
 -- BẢNG CẤU HÌNH TOÀN BỘ HUB
+-- =========================================================
 local VanThanhConfig = {
     -- Steal Settings
     AutoSteal = false,
@@ -60,19 +139,16 @@ local VanThanhConfig = {
     ModifyJump = false,
     InfiniteJump = false,
     Noclip = false,
-    Fly = false,
-    FlySpeed = 50,
     
     -- System & Performance
     AntiAFK = true,
     Disable3D = false,
-    LowGraphics = false,
-    RemoveEffects = false
+    LowGraphics = false
 }
 
--- KHỞI TẠO ORION UI (GIAO DIỆN VĂN THÀNH HUB)
+-- KHỞI TẠO ORION UI
 local Window = OrionLib:MakeWindow({
-    Name = "Văn Thành Hub | Steal An Anime Egg 🥚 [FULL]",
+    Name = "Văn Thành Hub | Steal An Anime Egg 🥚 [ANTI-BAN EDITION]",
     HidePremium = false,
     SaveConfig = true,
     ConfigFolder = "VanThanhHub_Config",
@@ -170,7 +246,7 @@ local TabUpgrades = Window:MakeTab({
 TabUpgrades:AddSection({ Name = "⚡ Tự Động Nâng Cấp Base" })
 
 TabUpgrades:AddToggle({
-    Name = "Auto Upgrade Treadmill (Máy Chạy Tăng Tốc)",
+    Name = "Auto Upgrade Treadmill",
     Default = VanThanhConfig.AutoUpgradeTreadmill,
     Callback = function(Value)
         VanThanhConfig.AutoUpgradeTreadmill = Value
@@ -178,7 +254,7 @@ TabUpgrades:AddToggle({
 })
 
 TabUpgrades:AddToggle({
-    Name = "Auto Upgrade Plot (Mở Rộng Đất)",
+    Name = "Auto Upgrade Plot",
     Default = VanThanhConfig.AutoUpgradePlot,
     Callback = function(Value)
         VanThanhConfig.AutoUpgradePlot = Value
@@ -188,7 +264,7 @@ TabUpgrades:AddToggle({
 TabUpgrades:AddSection({ Name = "🎁 Tự Động Nhận Thưởng" })
 
 TabUpgrades:AddToggle({
-    Name = "Auto Claim Online Rewards (Quà Thời Gian)",
+    Name = "Auto Claim Online Rewards",
     Default = VanThanhConfig.AutoClaimPlaytime,
     Callback = function(Value)
         VanThanhConfig.AutoClaimPlaytime = Value
@@ -212,7 +288,7 @@ local TabPlayer = Window:MakeTab({
     PremiumOnly = false
 })
 
-TabPlayer:AddSection({ Name = "🏃 Chi Số Di Chuyển" })
+TabPlayer:AddSection({ Name = "🏃 Chỉ Số Di Chuyển (Spoofed)" })
 
 TabPlayer:AddToggle({
     Name = "Kích Hoạt Chỉnh WalkSpeed",
@@ -382,15 +458,21 @@ TabSystem:AddButton({
 -- HỆ THỐNG LOGIC CHẠY NGẦM (CORE ENGINE)
 -- ==========================================
 
--- 1. Hàm di chuyển mượt an toàn (Bypass Anti-Cheat Teleport Check)
+-- 1. Safe Move bypass Velocity Check
 local function VanThanhSafeMove(targetCFrame)
     if not RootPart then return end
+    
+    RootPart.Velocity = Vector3.new(0, 0, 0)
+    
     local distance = (RootPart.Position - targetCFrame.Position).Magnitude
     local duration = distance / math.max(VanThanhConfig.StealSpeed, 10)
     local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
     local tween = TweenService:Create(RootPart, tweenInfo, {CFrame = targetCFrame})
+    
     tween:Play()
     tween.Completed:Wait()
+    
+    RootPart.Velocity = Vector3.new(0, 0, 0)
 end
 
 -- 2. Anti-AFK
@@ -401,7 +483,7 @@ LocalPlayer.Idled:Connect(function()
     end
 end)
 
--- 3. Noclip & Infinite Jump & Speed Control
+-- 3. Noclip & Speed Bypass
 RunService.Stepped:Connect(function()
     if VanThanhConfig.Noclip and Character then
         for _, part in ipairs(Character:GetDescendants()) do
@@ -445,13 +527,12 @@ task.spawn(function()
                                 if rarity and VanThanhConfig.StealRarities[rarity] then
                                     local originalCFrame = RootPart.CFrame
                                     
-                                    -- Bay mượt tới trứng
                                     VanThanhSafeMove(parent.CFrame + Vector3.new(0, 3, 0))
-                                    task.wait(0.2)
-                                    fireproximityprompt(prompt)
-                                    task.wait(0.3)
+                                    task.wait(0.15)
                                     
-                                    -- Trở về Căn Cứ
+                                    fireproximityprompt(prompt)
+                                    task.wait(0.25)
+                                    
                                     if VanThanhConfig.ReturnToBase then
                                         local myPlot = GetMyPlot()
                                         if myPlot then
