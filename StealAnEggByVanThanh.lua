@@ -862,9 +862,12 @@ end)
 local UIParent = getUIParent()
 
 local function create(className, props, parent)
-    local ok, obj = pcall(Instance.new, className)
+    local obj
+    local ok, err = pcall(function()
+        obj = Instance.new(className)
+    end)
     if not ok or not obj then
-        warn("[VT] Instance.new failed: " .. tostring(className))
+        warn("[VT] Instance.new failed for " .. tostring(className) .. ": " .. tostring(err))
         return nil
     end
     for k, v in pairs(props or {}) do
