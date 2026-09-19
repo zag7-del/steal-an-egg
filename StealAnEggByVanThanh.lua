@@ -611,10 +611,149 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 ----------------------------------------------------------------
+-- TOGGLE BUTTON (nút V nổi bật/tắt menu + RightShift keybind)
+----------------------------------------------------------------
+
+task.spawn(function()
+    task.wait(1.5)
+
+    local OrionGui = nil
+    pcall(function()
+        for _, gui in ipairs(game:GetService("CoreGui"):GetChildren()) do
+            if gui:IsA("ScreenGui") and string.find(gui.Name:lower(), "orion") then
+                OrionGui = gui break
+            end
+        end
+        if not OrionGui then
+            OrionGui = game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui")
+        end
+    end)
+
+    local sg = Instance.new("ScreenGui")
+    sg.Name           = "VTToggleBtn"
+    sg.ResetOnSpawn   = false
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+    local _syn = rawget(_G, "syn")
+    if _syn and type(_syn.protect_gui) == "function" then
+        pcall(_syn.protect_gui, sg)
+    end
+    pcall(function() sg.Parent = game:GetService("CoreGui") end)
+    if not sg.Parent then
+        pcall(function() sg.Parent = LocalPlayer:WaitForChild("PlayerGui",5) end)
+    end
+
+    -- badge frame
+    local badge = Instance.new("Frame")
+    badge.Name             = "VTBadge"
+    badge.Size             = UDim2.new(0, 50, 0, 50)
+    badge.Position         = UDim2.new(0, 14, 0.5, -25)
+    badge.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    badge.BorderSizePixel  = 0
+    badge.Active           = true
+    badge.Parent           = sg
+    Instance.new("UICorner", badge).CornerRadius = UDim.new(0, 10)
+
+    local stroke = Instance.new("UIStroke", badge)
+    stroke.Color     = Color3.fromRGB(80, 80, 80)
+    stroke.Thickness = 1.5
+
+    local label = Instance.new("TextLabel", badge)
+    label.Size               = UDim2.new(1,0,0.65,0)
+    label.Position           = UDim2.new(0,0,0,2)
+    label.BackgroundTransparency = 1
+    label.Text               = "V"
+    label.TextColor3         = Color3.fromRGB(255,255,255)
+    label.TextSize           = 24
+    label.Font               = Enum.Font.GothamBold
+    label.TextXAlignment     = Enum.TextXAlignment.Center
+    label.TextYAlignment     = Enum.TextYAlignment.Center
+
+    local sublabel = Instance.new("TextLabel", badge)
+    sublabel.Size               = UDim2.new(1,0,0.35,0)
+    sublabel.Position           = UDim2.new(0,0,0.65,0)
+    sublabel.BackgroundTransparency = 1
+    sublabel.Text               = "MENU"
+    sublabel.TextColor3         = Color3.fromRGB(160,160,160)
+    sublabel.TextSize           = 7
+    sublabel.Font               = Enum.Font.GothamBold
+    sublabel.TextXAlignment     = Enum.TextXAlignment.Center
+    sublabel.TextYAlignment     = Enum.TextYAlignment.Center
+
+    local clickBtn = Instance.new("TextButton", badge)
+    clickBtn.Size               = UDim2.new(1,0,1,0)
+    clickBtn.BackgroundTransparency = 1
+    clickBtn.Text               = ""
+    clickBtn.ZIndex             = 5
+
+    local menuVisible = true
+
+    local function refreshBadge()
+        pcall(function()
+            badge.BackgroundColor3 = menuVisible
+                and Color3.fromRGB(0,0,0)
+                or  Color3.fromRGB(35,15,70)
+            stroke.Color = menuVisible
+                and Color3.fromRGB(80,80,80)
+                or  Color3.fromRGB(120,60,220)
+            sublabel.Text = menuVisible and "MENU" or "OFF"
+            sublabel.TextColor3 = menuVisible
+                and Color3.fromRGB(160,160,160)
+                or  Color3.fromRGB(120,60,220)
+        end)
+    end
+
+    local function toggleMenu()
+        menuVisible = not menuVisible
+        pcall(function()
+            -- tìm lại Orion nếu chưa có
+            if not OrionGui or not OrionGui.Parent then
+                for _, gui in ipairs(game:GetService("CoreGui"):GetChildren()) do
+                    if gui:IsA("ScreenGui") then OrionGui = gui break end
+                end
+            end
+            if OrionGui then OrionGui.Enabled = menuVisible end
+        end)
+        refreshBadge()
+    end
+
+    clickBtn.MouseButton1Click:Connect(toggleMenu)
+
+    UserInputService.InputBegan:Connect(function(input, processed)
+        if processed then return end
+        if input.KeyCode == Enum.KeyCode.RightShift then toggleMenu() end
+    end)
+
+    -- drag
+    local dragging, dragStart, frameStart = false, nil, nil
+    badge.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging=true dragStart=input.Position frameStart=badge.Position
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if not dragging then return end
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            local d = input.Position - dragStart
+            badge.Position = UDim2.new(
+                frameStart.X.Scale, frameStart.X.Offset + d.X,
+                frameStart.Y.Scale, frameStart.Y.Offset + d.Y
+            )
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging=false end
+    end)
+
+    refreshBadge()
+end)
+
+----------------------------------------------------------------
 -- DONE
 ----------------------------------------------------------------
 
 print("[VAN THANH HUB] Loaded successfully")
-print("[VAN THANH HUB] Bypass layer: " .. (rawget(_G,"__VanThanhBypass") and "ACTIVE" or "unavailable on this executor"))
+print("[VAN THANH HUB] Bypass: " .. (rawget(_G,"__VanThanhBypass") and "ACTIVE" or "unavailable"))
+print("[VAN THANH HUB] Nút V = toggle menu | RightShift = toggle menu")
 
 OrionLib:Init()
