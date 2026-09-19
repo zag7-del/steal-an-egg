@@ -36,20 +36,32 @@ local isLClosure = (typeof(islclosure) == "function")
     and islclosure or function() return true end
 
 local function getUIParent()
-    if syn and syn.protect_gui then
+    -- try syn protect_gui
+    if typeof(syn) == "table" and typeof(syn.protect_gui) == "function" then
         local ok, gui = pcall(function()
             local g = Instance.new("ScreenGui")
             syn.protect_gui(g)
             g.Parent = game:GetService("CoreGui")
             return g
         end)
-        if ok then return gui end
+        if ok and gui then return gui end
     end
-    if gethui then
+    -- try gethui
+    if typeof(gethui) == "function" then
         local ok, h = pcall(gethui)
         if ok and h then return h end
     end
-    return safeRef(game:GetService("CoreGui"))
+    -- try CoreGui direct
+    local ok, cg = pcall(function()
+        return safeRef(game:GetService("CoreGui"))
+    end)
+    if ok and cg then return cg end
+    -- last resort: PlayerGui
+    local ok2, pg = pcall(function()
+        return LocalPlayer:WaitForChild("PlayerGui", 5)
+    end)
+    if ok2 and pg then return pg end
+    return nil
 end
 
 local function firePrompt(prompt)
@@ -850,12 +862,24 @@ end)
 local UIParent = getUIParent()
 
 local function create(className, props, parent)
-    local obj = Instance.new(className)
+    local ok, obj = pcall(Instance.new, className)
+    if not ok or not obj then
+        warn("[VT] Instance.new failed: " .. tostring(className))
+        return nil
+    end
     for k, v in pairs(props or {}) do
         pcall(function() obj[k] = v end)
     end
-    obj.Parent = parent
+    if parent then
+        pcall(function() obj.Parent = parent end)
+    end
     return obj
+end
+
+if not UIParent then
+    warn("[VT] UIParent is nil — falling back to PlayerGui")
+    UIParent = LocalPlayer:FindFirstChild("PlayerGui")
+        or game:GetService("CoreGui")
 end
 
 local ScreenGui = create("ScreenGui", {
@@ -864,7 +888,15 @@ local ScreenGui = create("ScreenGui", {
     ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 }, UIParent)
 
-if syn and syn.protect_gui then
+if not ScreenGui then
+    -- last resort bare creation
+    ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "StealEggHubV4"
+    ScreenGui.ResetOnSpawn = false
+    pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
+end
+
+if typeof(syn) == "table" and typeof(syn.protect_gui) == "function" then
     pcall(syn.protect_gui, ScreenGui)
 end
 
@@ -1019,9 +1051,15 @@ local function createTab(name, text, order)
         TextSize         = 10,
         Font             = Enum.Font.GothamMedium,
     }, Sidebar)
+    if not btn then
+        warn("[VT] createTab failed for: " .. tostring(name))
+        return nil
+    end
     create("UICorner", { CornerRadius = UDim.new(0,7) }, btn)
     Tabs[name] = btn
-    btn.MouseButton1Click:Connect(function() showPage(name) end)
+    pcall(function()
+        btn.MouseButton1Click:Connect(function() showPage(name) end)
+    end)
     return btn
 end
 
